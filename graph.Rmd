@@ -1,0 +1,75 @@
+---
+title: "Untitled"
+output: html_document
+date: "2023-02-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+a= read_csv("~/stockmkt/lib/metrix.csv")
+B=read_csv("~/stockmkt/lib/testmetrix.csv")
+c= read_csv("~/stockmkt/lib/covmetrix.csv")
+d=read_csv("~/stockmkt/lib/covtestmetrix.csv")
+
+```
+```{r}
+dd_m = reshape2::melt(a, c("model"))
+head(dd_m, 2)
+ggplot(dd_m) + 
+  geom_bar(aes(x=variable, y=value, fill=model), 
+              stat="identity", # Don't transform the data
+              position = "dodge" )+ggtitle("ftse train")  # Dodge the bars
+ggplot(dd_m) + 
+  geom_bar(aes(x=value, y=model, fill=variable), 
+              stat="identity", # Don't transform the data
+              position = "dodge") +ggtitle("ftse train")# Dodge the bars
+
+dd_m = reshape2::melt(B, c("model"))
+head(dd_m, 2)
+ggplot(dd_m) + 
+  geom_bar(aes(x=variable, y=value, fill=model), 
+              stat="identity", # Don't transform the data
+              position = "dodge") +ggtitle("ftse test")# Dodge the bars
+
+ggplot(dd_m) + 
+  geom_bar(aes(x=value, y=model, fill=variable), 
+              stat="identity", # Don't transform the data
+              position = "dodge")+ggtitle("ftse test") # Dodge the bars
+
+
+
+
+dd_m = reshape2::melt(c, c("model"))
+head(dd_m, 2)
+ggplot(dd_m) + 
+  geom_bar(aes(x=variable, y=value, fill=model), 
+              stat="identity", # Don't transform the data
+              position = "dodge") +ggtitle("ftsecov train")# Dodge the bars
+
+ggplot(dd_m) + 
+  geom_bar(aes(x=value, y=model, fill=variable), 
+              stat="identity", # Don't transform the data
+              position = "dodge") +ggtitle("ftsecov train")# Dodge the bars
+
+dd_m = reshape2::melt(d, c("model"))
+head(dd_m, 2)
+ggplot(dd_m) + 
+  geom_bar(aes(x=variable, y=value, fill=model), 
+              stat="identity", # Don't transform the data
+              position = "dodge") +ggtitle("ftse cov test")# Dodge the bars
+
+ggplot(dd_m) + 
+  geom_bar(aes(x=value, y=model, fill=variable), 
+              stat="identity", # Don't transform the data
+              position = "dodge") +ggtitle("ftse cov test")# Dodge the bars
+
+```
