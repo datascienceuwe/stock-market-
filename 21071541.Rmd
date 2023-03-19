@@ -1,0 +1,882 @@
+---
+title: "Untitled"
+output: html_document
+date: "2023-02-17"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r include packages}
+install.packages("installr")
+install.packages("remotes")
+install.packages("vars") 
+install.packages("MTS")
+install.packages("tseries")
+install.packages("forecast")
+library(remotes)
+install.packages("rlang","1.0.6")
+install.packages("neuralnet")
+install.packages("tidyverse")
+install.packages("readr")
+install.packages("ggplot2", dependencies = TRUE)
+install_version("FitAR","1.94")
+install.packages('Metrics')
+install.packages("highcharter")
+install.packages("tidyquant")
+
+```
+
+```{r libraries}
+library(Metrics)
+library(installr)
+library(remotes)
+library(vars) 
+library(MTS)
+library(tseries)
+library(neuralnet)
+library(TTR)
+library(quantmod)
+library(MASS)
+library(grid)
+#remove.packages("rlang")
+library(ggplot2)
+library(forecast)
+library(reshape2)
+library(FitAR)
+library(readr)
+library(zoo)
+library(xts)
+library(highcharter)
+library(tidyquant)
+
+```
+```{r load dataset}
+
+stockdataftse <- getSymbols ("^FTSE",auto.assign = FALSE, from = "2009-01-01", to="2022-11-11")
+#head(stockdataftse)
+ftsecovid<- getSymbols ("^FTSE",auto.assign = FALSE, from = "2019-12-12", to="2022-11-11")
+na.approx(ftsecovid)
+
+#stockdatanifty <- getSymbols ("^NSEI",auto.assign = FALSE, from = "2009-01-01", to="2022-11-11")
+#head(stockdatanifty)
+stockdatacac <- getSymbols ("^FCHI",auto.assign = FALSE, from = "2009-01-01", to="2022-11-11")
+#head(stockdatacac)
+stockdatadax <- getSymbols ("DAX",auto.assign = FALSE, from = "2009-01-01", to="2022-11-11")
+#head(stockdatadax)
+stockdatastoxx <- getSymbols ("^STOXX",auto.assign = FALSE, from = "2009-01-01", to="2022-11-11")
+#head(stockdatastoxx)
+stockdataibex <- getSymbols ("^IBEX",auto.assign = FALSE, from = "2009-01-01", to="2022-11-11")
+#head(stockdataibex)
+
+
+```
+
+
+```{r check dataset}
+
+#Missing Value check
+sum(is.na(stockdataftse))
+sum(is.na(ftsecovid))
+#sum(is.na(stockdatanifty))
+sum(is.na(stockdatacac))
+sum(is.na(stockdatastoxx))
+sum(is.na(stockdatadax))
+sum(is.na(stockdataibex))
+
+#Frequency Check
+frequency(stockdataftse)
+frequency(ftsecovid)
+#frequency(stockdatanifty)
+frequency(stockdatacac)
+frequency(stockdatastoxx)
+frequency(stockdatadax)
+frequency(stockdataibex)
+#frequency(stockdatanifty)
+
+```
+```{r visualize}
+library(quantmod)
+chartSeries(stockdataftse,type="line",name="FTSE50 2009-2022",theme = 'white',TA="addSMA(100,col='blue')")
+chartSeries(stockdataftse, TA="addVo();addBBands();addCCI();addADX()", subset = '2022-06::', theme = 'white')
+chartSeries(ftsecovid, 
+            type = "candlesticks", 
+            subset = '2020-01::',theme = 'white',
+            show.grid = TRUE,
+            major.ticks='auto', minor.ticks=TRUE,
+            multi.col = FALSE,
+            TA=c(addMACD(),addSMA(n=100,col = 'blue'),addSMA(n=50,col = 'red'),
+            addROC(n=200,col = 'blue'),addROC(n=50,col = 'red'))) # rate of change
+#chartSeries(ftsecovid,name="ftse50 2019-2022",theme = 'white')
+candleChart(ftsecovid, TA=c(addMACD()), subset = '2019::2020-08', theme = 'white')
+
+#chartSeries(stockdatanifty,name="NIFTY50 2009-2022")
+chartSeries(stockdatacac,name="CAC40 2009-2022")
+chartSeries(stockdatastoxx,name="STOXX 2009-2022")
+chartSeries(stockdatadax,name="DAX 2009-2022")
+chartSeries(stockdataibex,name="IBEX.35 2009-2022")
+#since dax has data after year 2014 we are not using it further
+```
+```{r monthly return}
+#take only closing price
+closing_f = Cl(to.monthly(stockdataftse))
+closing_fc = Cl(to.monthly(stockdataftse))
+#closing_n = Cl(to.monthly(stockdatanifty))
+closing_c = Cl(to.monthly(stockdatacac))
+closing_s = Cl(to.monthly(stockdatastoxx))
+closing_i = Cl(to.monthly(stockdataibex))
+stockdata =merge.xts(closing_c,closing_f,closing_i,closing_fc,closing_s,all=TRUE)
+head(stockdata)
+sum(is.na(stockdata))
+```
+```{r monthly return chart}
+zoomarkets <- as.zoo(stockdata)
+autoplot(zoomarkets, facet = NULL) # plot without facets
+library(webshot)
+
+
+org <- highchart(type = "stock")%>%
+  hc_add_series(stockdataftse)%>%
+  hc_add_series(SMA(na.omit(Cl(stockdataftse)),n=50),name="SMA(50)")%>%
+  hc_add_series(SMA(na.omit(Cl(stockdataftse)),n=200),name="SMA(200)")%>%
+  hc_title(text="FTSE PRICE CANDLE STICK CH 2009-2022")
+htmlwidgets::saveWidget(widget = org, file = "org.html")
+getwd()
+webshot(url = "org.html", 
+        file = "org.png",
+        delay=3) # delay will ensure that the whole plot appears in the image
+#dev.off()
+highchart(type = "stock")%>%
+  hc_add_series(ftsecovid)%>%
+  hc_add_series(SMA(na.omit(Cl(ftsecovid)),n=50),name="SMA(50)")%>%
+  hc_add_series(SMA(na.omit(Cl(ftsecovid)),n=200),name="SMA(200)")%>%
+  hc_title(text="FTSE PRICE CANDLE STICK CH 2009-2022")
+highchart(type = "stock")%>%
+  hc_add_series(stockdatanifty)%>%
+  hc_add_series(SMA(na.omit(Cl(stockdatacac)),n=50),name="SMA(50)")%>%
+  hc_add_series(SMA(na.omit(Cl(stockdatacac)),n=200),name="SMA(200)")%>%
+  hc_title(text="CAC PRICE CANDLE STICK CH 2009-2022")
+ org<-highchart(type = "stock")%>%
+  hc_add_series(Cl(stockdataftse),name="FTSE")%>%
+  hc_add_series(Cl(stockdatacac),name="CAC")%>%
+  hc_title(text="FTSE VS CAC PRICE 2009-2022")
+htmlwidgets::saveWidget(widget = org, file = "org1.html")
+getwd()
+webshot(url = "org1.html", 
+        file = "org1.png",
+        delay=3) # delay will ensure that the whole plot appears in the image
+dev.off()
+
+
+```
+```{r}
+#STOCK RETURN ANALYSIS
+#calculate monthly
+ftsertn = dailyReturn(Cl(closing_f))
+cacrtn = dailyReturn(Cl(closing_c))
+#combine
+strtns1= data.frame(Date=as.Date(index(ftsertn),format="%b %Y"),coredata(ftsertn))
+strtns2= data.frame(Date=as.Date(index(cacrtn),format="%b %Y"),coredata(cacrtn))
+strtns=merge(strtns1,strtns2,by="Date")
+names(strtns)=c("Date","ftse return","cac return")
+str(strtns)
+library(timetk)
+strtns=xts::xts(strtns[,-1],order.by = strtns$Date)
+#plot
+charts.PerformanceSummary(strtns, main = "ftse vs cac dailyreturn")
+```
+
+
+```{r dp}
+#forecast for n days
+n=60
+N=2
+
+#### TRAIN - TEST SPLIT
+#library(xts)
+attr(stockdata,'frequency')<-12
+stdata <- as.ts(Cl(stockdata), start = c(2009,2))
+colnames(stdata)=c("CAC","FTSE","IBEX","ftsecovid","STOXX")
+
+str(stdata)
+sum(is.na(stdata))
+head(stdata)
+attr(stockdataftse,'frequency')<-260
+stfse <- as.ts(Cl(stockdataftse), start = c(2009,2))
+str(stfse)
+stfse=na.approx(stfse)
+sum(is.na(stfse))
+frequency(stfse)
+ftsecovid = ftsecovid[rowSums(is.na(ftsecovid)) == 0, ]
+attr(ftsecovid,'frequency')<-260
+stfsecovid <- as.ts(Cl(ftsecovid), start = c(2019,248))
+#na.omit(stfsecovid)
+str(stfsecovid)
+#stfse=na.approx(stfsecovid)
+sum(is.na(stfsecovid))
+frequency(stfsecovid)
+#drop_na(stfsecovid)
+```
+```{r data split}
+#stockdataftse=na.omit(stockdataftse)
+FTSEtrain=(head((stfse),length(stfse)-1000))
+FTSEtest =(tail(stfse,1000))
+
+Fcovidtrain=(head((stfsecovid),length(stfsecovid)-200))
+Fcovidtest =(tail(stfsecovid,200))
+#FTSEtrain=as.ts(FTSEtrain,start=c(2009,1))
+#NIFTY=head(Cl(stockdatanifty),length(Cl(stockdatanifty))-n)
+#NIFTYtest = tail(Cl(stockdatanifty),n)
+#ftsemonthtrain =as.ts(head(closing_f,length(closing_f)-N))
+#ftsemontest=as.ts(tail(closing_f,N))
+#niftymonth =head(closing_n,length(closing_n)-N)
+#nmtest=tail(closing_n,N)
+```
+```{r decompose}
+#### Arima
+#1. additive decompose
+#attr(FTSEtrain,'frequency')<-260
+ftsedc <- decompose(FTSEtrain)#,type = 'additive',filter = NULL)
+plot(ftsedc)
+ftsedc1 = FTSEtrain-ftsedc$seasonal
+
+
+ftsecovdc <- decompose(Fcovidtrain)#,type = 'additive',filter = NULL)
+plot(ftsecovdc)#frequency(FTSE)
+ftsecovdc1 = Fcovidtrain-ftsecovdc$seasonal
+
+#niftydc <- decompose(as.ts(NIFTY,start=c(2009,1)))
+#plot(niftydc)
+#attr(ftsemonthtrain,"frequency")<-12
+#ftsedcm <- decompose(as.ts(ftsemonthtrain,start=c(2009,1)))
+#plot(ftsedcm)
+#niftydc <- decompose(as.ts(niftymonth,start=c(2009,1)))
+#plot(niftydc)
+
+  #2. Multiplicative Decompose
+plot(decompose(FTSEtrain,type='multiplicative'))
+plot(decompose(Fcovidtrain,type='multiplicative'))
+
+  #plot(stl(FTSEtrain,s.window='periodic'))
+#plot(stl(ftsemonthtrain,s.window='periodic'))
+
+```
+```{r stationary}
+#Testing for Stationarity by applying Augmented Dicker-Fuller Test on all column values of datset
+#stationary  means, having constant mean and variance over time
+adf.test(ftsedc1)
+adf.test(ftsecovdc1)
+fstnry=diff(ftsedc1,2)
+fcstnry=diff(ftsecovdc1,2)
+adf.test(fstnry)
+adf.test(fcstnry)
+
+#adf.test(ftsemonthtrain)
+
+```
+```{r acftest}
+#To find the Correlation using Autocorrelation Function and Partial Autocorrelation Function of our series
+#install.packages("DescTools")
+library(DescTools)
+
+PlotACF(fstnry,  lag.max = 10 * log10(length(fstnry)), main = NULL, cex = NULL)
+PlotGACF(fstnry, lag.max = 10 * log10(length(fstnry)), type = "cor", ylab = NULL)
+PlotACF(fcstnry, lag.max = 10 * log10(length(fcstnry)), main = NULL, cex = NULL)
+PlotGACF(fcstnry, lag.max = 10 * log10(length(fcstnry)), type = "cor", ylab = NULL)
+
+```
+
+```{r auto arima}
+fit=auto.arima(ftsedc1, trace=TRUE)
+plot(forecast(fit,h=n))
+fit1=auto.arima(ftsecovdc1, trace=TRUE)
+plot(forecast(fit1,h=n))
+
+#auto.arima(ftsemonthtrain, trace=TRUE)
+
+```
+```{r}
+arimamodelftse <- arima(ftsedc1,order=c(0,1,0))
+plot(forecast(arimamodelftse,h=n))
+ftse1 <- arima(ftsedc1,order=c(2,1,2))
+plot(forecast(ftse1,h=n))
+ftse2 <- arima(ftsedc1,order=c(1,1,1))
+plot(forecast(ftse2,h=n))
+ftse3 <- arima(ftsedc1,order=c(1,1,0))
+plot(forecast(ftse3,h=n))
+
+arimamodelfcovid <- arima(ftsecovdc1,order=c(0,1,0))
+plot(forecast(arimamodelfcovid,h=n))
+#arimamodelftsem <- arima(ftsemonthtrain,order=c(0,1,0))
+
+```
+```{r arima residual}
+#Visualizing the residuals
+#plot(arimamodelftse$residuals)
+checkresiduals(fit)
+checkresiduals(arimamodelftse)
+checkresiduals(arimamodelfcovid)
+#plot(arimamodelftsem$residuals)
+```
+```{r}
+#Performing Ljung Box  test
+Box.test(arimamodelftse$residuals,type="Ljung-Box",lag = 520 )
+Box.test(arimamodelfcovid$residuals,type="Ljung-Box",lag = 520 )
+#Box.test(arimamodelftsem$residuals,type="Ljung-Box")
+```
+
+
+```{r}
+
+predicted_valuesftse = forecast(arimamodelftse,h=1000, level=c(99.5))
+plot(predicted_valuesftse)
+predicted_valuesfcovid = forecast(arimamodelfcovid,h=200, level=c(99.5))
+plot(predicted_valuesfcovid)
+#predicted_valuesftsem = forecast(arimamodelftsem,h=N, level=c(99.5))
+#plot(predicted_valuesftsem
+pftse1=forecast(ftse1,h=1000, level=c(99.5))
+pftse2=forecast(ftse2,h=1000, level=c(99.5))
+pftse3=forecast(ftse3,h=1000, level=c(99.5))
+```
+```{r}
+
+predicted_valuesftse = forecast(arimamodelftse,h=1000, level=c(99.5))
+df_arimaftse = as.data.frame(predicted_valuesftse)
+arimaftse = df_arimaftse$`Point Forecast`
+dataftse = as.data.frame(FTSEtest)
+dataftse$arima = arimaftse
+colnames(dataftse) = c("test","predicted")
+dataftse$x = 1:1000
+dataftse.melted <- melt(dataftse, id="x")
+qplot(x=x, y=value, color=variable, data=dataftse.melted, geom="line")
+
+predicted_valuesfcovid = forecast(arimamodelfcovid,h=200, level=c(99.5))
+df_arimafcovid = as.data.frame(predicted_valuesfcovid)
+arimaftsecov = df_arimafcovid$`Point Forecast`
+datafcov = as.data.frame(Fcovidtest)
+datafcov$arima = arimaftsecov
+colnames(datafcov) = c("test","predicted")
+datafcov$x = 1:200
+datafcov.melted <- melt(datafcov, id="x")
+qplot(x=x, y=value, color=variable, data=dataftse.melted, geom="line")
+#predicted_valuesftsem = forecast(arimamodelftsem,h=N, level=c(99.5))
+#df_arimaftsem = as.data.frame(predicted_valuesftsem)
+#arimaftsem = df_arimaftsem$`Point Forecast`
+#dataftsem = as.data.frame(ftsemontest)
+#dataftsem$arima = arimaftsem
+#colnames(dataftsem) = c("test","predicted")
+#dataftsem$x = 1:N
+#dataftsem.melted <- melt(dataftsem, id="x")
+#qplot(x=x, y=value, color=variable, data=dataftsem.melted, geom="line")
+
+```
+
+
+
+```{r}
+#create model
+
+#fmodel <- auto.arima(FTSEtrain,seasonal=FALSE)
+#fc <-forecast(fmodel,h=n)
+#autoplot(fmodel)+
+#  autolayer(FTSEtest,start=length(FTSEtrain),series = "test data")
+
+#predicted_valuesftse %>%
+ # forecast(h=n)%>%
+#  autoplot()+
+#  autolayer(ts(FTSEtrain),series = "train data")+
+#  autolayer(ts(FTSEtest,start=length(FTSEtrain)),series = "test data")
+arimamodelftse %>%
+  forecast(h=1000+n) %>%
+  autoplot() + autolayer(FTSEtest,start=length(FTSEtrain),series = "test data")
+arimamodelfcovid %>%
+  forecast(h=200+n) %>%
+  autoplot() + autolayer(Fcovidtest,start=length(Fcovidtrain),series = "test data")
+
+```
+```{r}
+#accuracy train metrics
+ac_trainmatrix=data.frame()
+ac_testmatrix=data.frame()
+ac_trainmatrixcov=data.frame()
+ac_testmatrixcov=data.frame()
+```
+```{r}
+print("ARIMA(0,1,0) train")
+accuracy(predicted_valuesftse)
+print("ARIMA (2,1,2) TRAIN")
+accuracy(pftse1)
+print("ARIMA (1,1,1) TRAIN")
+accuracy(pftse2)
+print("ARIMA (1,1,0) TRAIN")
+accuracy(pftse3)
+
+#print("ARIMA(0,1,0) test")
+#accuracy(FTSEtest ,predicted_valuesftse)
+#print("ARIMA (2,1,2) test")
+#accuracy(FTSEtest, pftse1)
+#print("ARIMA (1,1,1) test")
+#accuracy(FTSEtest ,pftse2)
+#print("ARIMA (1,1,0) test")
+#accuracy(FTSEtest  ,pftse3)
+```
+```{r}
+print("train metrics")
+ac_trainmatrix = accuracy(predicted_valuesftse)
+ac_trainmatrixcov = accuracy(predicted_valuesfcovid)
+ac_trainmatrix
+#test metrics
+print("test metrics")
+ac_testmatrix=accuracy(FTSEtest,arimaftse)
+ac_testmatrixcov=accuracy(Fcovidtest,arimaftsecov)
+ac_testmatrix
+```
+
+
+
+
+```{r}
+
+```
+```{r}
+#### naive
+ftsena = naive(stfse,h=1000)
+autoplot(ftsena)+
+  autolayer(FTSEtest,start = length(FTSEtrain),series="FTSE Test Date")
+checkresiduals(ftsena)
+fcovna = naive(stfsecovid,h=200)
+autoplot(fcovna)+
+  autolayer(Fcovidtest,start = length(Fcovidtrain),series="FTSE covid Test Date")
+checkresiduals(fcovna)
+#nftyna = naive(NIFTY,h=n)
+#autoplot(nftyna)+
+#  autolayer(ts(NIFTYtest,start = length(NIFTY)),series="NIFTY Test Date")
+```
+
+```{r}
+
+```
+```{r}
+#accuracy(ftsena)
+ac_trainmatrix=rbind(ac_trainmatrix,accuracy(ftsena))
+ac_trainmatrix
+df_ftse = as.data.frame(ftsena)
+ftnaive= df_ftse$`Point Forecast`
+####
+print(paste0("RMSE: ", rmse(FTSEtest, ftnaive)))
+print(paste0("MAPE: ", mape(FTSEtest, ftnaive)))
+ac_testmatrix=rbind(ac_testmatrix,accuracy(FTSEtest,ftnaive))
+####
+ac_trainmatrixcov=rbind(ac_trainmatrixcov,accuracy(fcovna))
+ac_trainmatrixcov
+df_ftsecov = as.data.frame(fcovna)
+ftnaivecov= df_ftsecov$`Point Forecast`
+####
+#print(paste0("RMSE: ", rmse(FTSEtest, ftnaive)))
+#print(paste0("MAPE: ", mape(FTSEtest, ftnaive)))
+ac_testmatrixcov=rbind(ac_testmatrixcov,accuracy(Fcovidtest,ftnaivecov))
+#accuracy(nftyna)
+#df_nfty = as.data.frame(nftyna)
+#nynaive= df_nfty$`Point Forecast`
+#print(paste0("RMSE: ", rmse(NIFTYtest, nynaive)))
+#print(paste0("MAPE: ", mape(NIFTYtest, nynaive)))
+
+```
+```{r}
+## HOLT-WINTERS
+holtwintermodelftse<-HoltWinters(FTSEtrain,alpha=NULL, beta=NULL, gamma=NULL,seasonal = "multiplicative"  )#,gamma=FALSE)
+f1=(forecast(holtwintermodelftse,h=1000))
+plot(f1)
+lines(f1$fitted, lty=2, col="purple")
+HW=predict(holtwintermodelftse,1000,prediction.interval = TRUE,level=0.95)
+plot(FTSEtrain)
+#lines(HW["fit"][,1], lty=2, col="blue")
+lines(f1$fitted, lty=2, col="purple")
+lines(HW[,1], col="red")
+lines(HW[,2], lty=2, col="orange")
+lines(HW[,3], lty=2, col="orange")
+
+
+#predftse <- as.data.frame(forecast(holtwintermodelftse))
+holtwintermodelftsecov<-HoltWinters(Fcovidtrain, alpha = NULL,beta=NULL,gamma=NULL)#,gamma=FALSE)
+f1=(forecast(holtwintermodelftsecov,h=200))
+plot(f1)
+lines(f1$fitted, lty=2, col="purple")
+```
+```{r}
+acf(f1$residuals, lag.max=20, na.action=na.pass)
+Box.test(f1$residuals, lag=20, type="Ljung-Box")
+hist(f1$residuals)
+#It's important to use na.action=na.pass because the last value of $residuals is always NA, otherwise the function throws an error.
+```
+```{r}
+### Holt winters Train Forecast Plot
+predicted_valuesftse = forecast(holtwintermodelftse,h=1000)
+plot(predicted_valuesftse)
+### Holt winters Train Test Forecast Plot
+df_opftse = as.data.frame(predicted_valuesftse)
+hwftse = df_opftse$`Point Forecast`
+dataftse = as.data.frame(FTSEtest)
+dataftse$arima = hwftse
+colnames(dataftse) = c("test","predicted")
+dataftse$x = 1:1000
+dataftse.melted <- melt(dataftse, id="x")
+require(ggplot2)
+qplot(x=x, y=value, color=variable, data=dataftse.melted, geom="line")
+
+predicted_valuesfcovid = forecast(holtwintermodelftsecov,h=200)
+plot(predicted_valuesfcovid)
+### Holt winters Train Test Forecast Plot
+df_opftsecov = as.data.frame(predicted_valuesfcovid)
+hwftsecov = df_opftsecov$`Point Forecast`
+dataftsecov = as.data.frame(Fcovidtest)
+dataftsecov$arima = hwftsecov
+colnames(dataftsecov) = c("test","predicted")
+dataftsecov$x = 1:200
+dataftsecov.melted <- melt(dataftsecov, id="x")
+require(ggplot2)
+qplot(x=x, y=value, color=variable, data=dataftsecov.melted, geom="line")
+
+```
+```{r}
+####plot
+holtwintermodelftse %>%
+  forecast(h=1000+n) %>%
+  autoplot() + autolayer(FTSEtest)
+holtwintermodelftsecov %>%
+  forecast(h=200+n) %>%
+  autoplot() + autolayer(Fcovidtest)
+
+```
+## R Markdown
+```{r}
+#Train Metrics
+accuracy(predicted_valuesftse)
+ac_trainmatrix=rbind(ac_trainmatrix,accuracy(predicted_valuesftse))
+
+print(paste0("RMSE: ", rmse(FTSEtest, hwftse)))
+print(paste0("MAPE: ", mape(FTSEtest, hwftse)))
+ac_testmatrix=rbind(ac_testmatrix,accuracy(FTSEtest,hwftse))
+###
+accuracy(predicted_valuesfcovid)
+ac_trainmatrixcov=rbind(ac_trainmatrixcov,accuracy(predicted_valuesfcovid))
+
+#print(paste0("RMSE: ", rmse(FTSEtest, hwftse)))
+#print(paste0("MAPE: ", mape(FTSEtest, hwftse)))
+ac_testmatrixcov=rbind(ac_testmatrixcov,accuracy(Fcovidtest,hwftsecov))
+
+```
+```{r}
+# Neural Network
+neuralnetworkmodelftse <- nnetar(FTSEtrain)
+plot(forecast(neuralnetworkmodelftse,h=1000))
+#lines(FTSEtrain)
+checkresiduals(neuralnetworkmodelftse)
+
+neuralnetworkmodelftsecov <- nnetar(Fcovidtrain)
+plot(forecast(neuralnetworkmodelftsecov,h=200))
+checkresiduals(neuralnetworkmodelftsecov)
+
+```
+```{r}
+### Neural Network Train Forecast Plot
+predicted_valuesftse <- forecast(neuralnetworkmodelftse,1000,level=c(80,95))#,PI=TRUE)
+plot(predicted_valuesftse)
+predicted_valuesftsecov <- forecast(neuralnetworkmodelftsecov,200,level=c(80,95))#,PI=TRUE)
+plot(predicted_valuesftsecov)
+
+```
+```{r}
+### Neural Network Train Test Forecast Plot
+#predicted_values = forecast(neuralnetworkmodel,h=30)
+df_opftse = as.data.frame(predicted_valuesftse)
+nnftse = df_opftse$`Point Forecast`
+dataftse = as.data.frame(FTSEtest)
+dataftse$arima = nnftse
+colnames(dataftse) = c("test","predicted")
+dataftse$x = 1:1000
+dataftse.melted <- melt(dataftse, id="x")
+require(ggplot2)
+qplot(x=x, y=value, color=variable, data=dataftse.melted, geom="line")
+#predicted_values = forecast(neuralnetworkmodel,h=30)
+df_opftsecov = as.data.frame(predicted_valuesftsecov)
+nnftsecov = df_opftsecov$`Point Forecast`
+dataftsecov = as.data.frame(Fcovidtest)
+dataftsecov$arima = nnftsecov
+colnames(dataftsecov) = c("test","predicted")
+dataftsecov$x = 1:200
+dataftsecov.melted <- melt(dataftsecov, id="x")
+require(ggplot2)
+qplot(x=x, y=value, color=variable, data=dataftsecov.melted, geom="line")
+
+```
+```{r}
+neuralnetworkmodelftse %>%
+  forecast(h=n+n) %>%
+  autoplot() + autolayer(FTSEtest)
+neuralnetworkmodelftsecov %>%
+  forecast(h=n+n) %>%
+  autoplot() + autolayer(Fcovidtest)
+
+```
+```{r}
+
+#Train Metrics
+accuracy(predicted_valuesftse)
+ac_trainmatrix=rbind(ac_trainmatrix,accuracy(predicted_valuesftse))
+accuracy(FTSEtest,nnftse)
+ac_testmatrix=rbind(ac_testmatrix,accuracy(FTSEtest,nnftse))
+#Train Metrics
+accuracy(predicted_valuesftsecov)
+ac_trainmatrixcov=rbind(ac_trainmatrixcov,accuracy(predicted_valuesftsecov))
+accuracy(Fcovidtest,nnftsecov)
+ac_testmatrixcov=rbind(ac_testmatrixcov,accuracy(Fcovidtest,nnftsecov))
+
+```
+
+```{r}
+#We convert dataset as prophet input requires
+df <- data.frame(ds=(index(stockdataftse)),y=as.numeric(stockdataftse[,'FTSE.Close']))
+#prophet model application
+library(prophet)
+str(df)
+
+dfcov <- data.frame(ds=(index(ftsecovid)),y=as.numeric(ftsecovid[,'FTSE.Close']))
+#prophet model application
+#library(prophet)
+str(dfcov)
+
+```
+```{r}
+prophetpred <- prophet(df)#,daily.seasonality = TRUE)
+future <- make_future_dataframe(prophetpred,periods = 260)#, include_history = TRUE)
+head(future)
+forecastprophet <- predict(prophetpred, future)
+head(forecastprophet)
+fp=forecast(forecastprophet$yhat,h=n)
+plot(fp)
+plot(prophetpred,forecastprophet)
+prophet_plot_components(prophetpred,forecastprophet)
+###
+prophetpredcov <- prophet(dfcov)#,daily.seasonality = TRUE)
+future1 <- make_future_dataframe(prophetpredcov,periods = 260)#, include_history = TRUE)
+head(future1)
+forecastprophetcov <- predict(prophetpredcov, future1)
+head(forecastprophetcov)
+fpcov=forecast(forecastprophetcov$yhat,h=n)
+plot(fpcov)
+plot(prophetpredcov,forecastprophetcov)
+prophet_plot_components(prophetpredcov,forecastprophetcov)
+
+
+```
+```{r}
+#Creating train prediction dataset to compare the real data
+dataprediction <- data.frame(forecastprophet$ds,forecastprophet$yhat)
+trainlen <- length(stockdataftse)
+dataprediction <- dataprediction[c(1:trainlen),]
+tail(forecastprophet[c("ds", "yhat", "yhat_lower", "yhat_upper")])
+#Creating train prediction dataset to compare the real data
+datapredictioncov <- data.frame(forecastprophetcov$ds,forecastprophetcov$yhat)
+trainlencov <- length(ftsecovid)
+datapredictioncov <- dataprediction[c(1:trainlencov),]
+tail(forecastprophetcov[c("ds", "yhat", "yhat_lower", "yhat_upper")])
+
+```
+```{r}
+
+```
+```{r}
+#Creating cross validation 
+accuracy(fp)
+#accuracy(forecastprophet$yhat,df$y)
+ac_trainmatrix=rbind(ac_trainmatrix,accuracy(fp))
+accuracy(dataprediction$forecastprophet.yhat,df$y)
+ac_testmatrix=rbind(ac_testmatrix,accuracy(forecastprophet$yhat,df$y))
+#Creating cross validation 
+accuracy(fpcov)
+#accuracy(forecastprophetcov$yhat,dfcov$y)
+ac_trainmatrixcov=rbind(ac_trainmatrixcov,accuracy(fpcov))
+accuracy(datapredictioncov$forecastprophet.yhat,dfcov$y)
+ac_testmatrixcov=rbind(ac_testmatrixcov,accuracy(forecastprophetcov$yhat,dfcov$y))
+
+```
+```{r}
+#n=60
+#Loading time series forecasting nearest neighbors package
+if(!require(tsfknn)) install.packages("tsfknn")
+library(tsfknn)
+predknn <- knn_forecasting(FTSEtrain, h = 1000, lags = 1:260, k = 50,transform = "additive", msas = "MIMO", cf="mean")
+knn_examples(predknn)
+(predknn$prediction)
+autoplot(predknn)
+
+predknncov <- knn_forecasting(Fcovidtrain, h = 200, lags = 1:260, k = 23,transform = "additive", msas = "MIMO", cf="mean")
+knn_examples(predknncov)
+(predknncov$prediction)
+plot(predknncov)
+
+```
+```{r}
+nearest_neighbors(predknn)
+autoplot(predknn, highlight = "neighbors",faceting = FALSE)
+nearest_neighbors(predknncov)
+autoplot(predknncov, highlight = "neighbors",faceting = FALSE)
+
+```
+```{r}
+#Train set model accuracy
+#accuracy(predknn)
+ro <- rolling_origin(predknn,h=n,rolling = FALSE)
+#ro$test_sets
+#ro$predictions
+#ro$errors
+print(ro$global_accu)
+plot(ro,h=n)
+A=ac_testmatrix
+RMSE=ro[["global_accu"]][["RMSE"]]
+MAE=ro[["global_accu"]][["MAE"]]
+MAPE=ro[["global_accu"]][["MAPE"]]
+row=c(0,RMSE,MAE,0,MAPE)
+ac_testmatrix=rbind(ac_testmatrix,row)
+
+ro <- rolling_origin(predknncov,h=n,rolling = FALSE)
+#ro$test_sets
+#ro$predictions
+#ro$errors
+print(ro$global_accu)
+plot(ro,h=n)
+A=ac_testmatrixcov
+RMSE=ro[["global_accu"]][["RMSE"]]
+MAE=ro[["global_accu"]][["MAE"]]
+MAPE=ro[["global_accu"]][["MAPE"]]
+row1=c(0,RMSE,MAE,0,MAPE)
+ac_testmatrixcov=rbind(ac_testmatrixcov,row1)
+
+```
+```{r}
+#Hidden layers creation
+alpha <- 1.5^(-10)
+hn <- length(FTSEtrain)/(alpha*(length(FTSEtrain)+n))
+#Fitting nnetar
+lambda <- BoxCox.lambda(FTSEtrain)
+dnn_pred <- nnetar(FTSEtrain, size= hn, lambda = lambda)
+#Fitting nnetar
+dnn_forecast <- forecast(dnn_pred, h= n, PI = TRUE)
+plot(dnn_forecast)
+
+#Hidden layers creation
+alpha <- 1.5^(-10)
+hncov <- length(Fcovidtrain)/(alpha*(length(Fcovidtrain)+n))
+#Fitting nnetar
+lambda1 <- BoxCox.lambda(Fcovidtrain)
+dnn_predcov <- nnetar(Fcovidtrain, size= hn, lambda = lambda1)
+#Fitting nnetar
+dnn_forecastcov <- forecast(dnn_predcov, h= n, PI = TRUE)
+plot(dnn_forecastcov)
+
+```
+```{r}
+### Neural Network Train Forecast Plot
+predicted_valuesftse <- dnn_forecast
+plot(predicted_valuesftse)
+### Neural Network Train Test Forecast Plot
+#predicted_values = forecast(neuralnetworkmodel,h=30)
+df_opftse = as.data.frame(predicted_valuesftse)
+dnnftse = df_opftse$`Point Forecast`
+dataftse = as.data.frame(FTSEtest)
+dataftse$arima = dnnftse
+colnames(dataftse) = c("test","predicted")
+dataftse$x = 1:n
+dataftse.melted <- melt(dataftse, id="x")
+require(ggplot2)
+qplot(x=x, y=value, color=variable, data=dataftse.melted, geom="line")
+
+###########
+predicted_valuesftsecov <- dnn_forecastcov
+plot(predicted_valuesftsecov)
+### Neural Network Train Test Forecast Plot
+#predicted_values = forecast(neuralnetworkmodel,h=30)
+df_opftsecov = as.data.frame(predicted_valuesftsecov)
+dnnftsecov = df_opftsecov$`Point Forecast`
+dataftsecov = as.data.frame(Fcovidtest)
+dataftsecov$arima = dnnftsecov
+colnames(dataftsecov) = c("test","predicted")
+dataftsecov$x = 1:n
+dataftsecov.melted <- melt(dataftsecov, id="x")
+require(ggplot2)
+qplot(x=x, y=value, color=variable, data=dataftsecov.melted, geom="line")
+
+#accuracy(dnn_forecast)
+#ac_trainmatrix=rbind(ac_trainmatrix,accuracy(dnn_forecast))
+#accuracy(dnn_forecast[["call"]][["y"]],dnn_forecast)
+```
+```{r}
+#final train test predict model
+dnn_pred %>%
+  forecast(h=n+n) %>%
+  autoplot() + autolayer(FTSEtest)
+dnn_predcov %>%
+  forecast(h=n+n) %>%
+  autoplot() + autolayer(Fcovidtest)
+
+```
+```{r}
+#accuracy metrics
+accuracy(predicted_valuesftse)
+ac_trainmatrix=rbind(ac_trainmatrix,accuracy(predicted_valuesftse))
+accuracy(FTSEtest,dnnftse)
+ac_testmatrix=rbind(ac_testmatrix,accuracy(FTSEtest,nnftse))
+
+accuracy(predicted_valuesftsecov)
+ac_trainmatrixcov=rbind(ac_trainmatrixcov,accuracy(predicted_valuesftsecov))
+accuracy(Fcovidtest,dnnftsecov)
+ac_testmatrixcov=rbind(ac_testmatrixcov,accuracy(Fcovidtest,nnftsecov))
+
+```
+
+
+```{r}
+#ac_trainmatrix=unique(ac_trainmatrix)#[!(row.names(ac_trainmatrix)=="Training.set.3")]
+#chk#.drop("Training.set.3")
+model=c("arima","naive","hw","nn","prophet")
+ac_trainmatrix=cbind(model,ac_trainmatrix)
+ac_trainmatrix
+write.csv(ac_trainmatrix,"metrix.csv",row.names = FALSE)
+model=c("arima","naive","hw","nn","prophet","knn")
+ac_testmatrix=cbind(model,ac_testmatrix)
+ac_testmatrix
+write.csv(ac_testmatrix,"testmetrix.csv",row.names = FALSE)
+
+model=c("arima","naive","hw","nn","prophet")
+ac_trainmatrixcov=cbind(model,ac_trainmatrixcov)
+ac_trainmatrixcov
+write.csv(ac_trainmatrixcov,"covmetrix.csv",row.names = FALSE)
+model=c("arima","naive","hw","nn","prophet","knn")
+ac_testmatrixcov=cbind(model,ac_testmatrixcov)
+ac_testmatrixcov
+write.csv(ac_testmatrixcov,"covtestmetrix.csv",row.names = FALSE)
+
+```
+```{r}
+boxplot(factor(model)~RMSE,data=ac_trainmatrix, main="MODEL RMSE Data",
+   xlab="MODELS", ylab="RMSE")
+```
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
